@@ -1,0 +1,652 @@
+:root {
+    --primary-color: #2563eb;
+    --primary-light: #eff6ff;
+    --primary-hover: #1d4ed8;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --bg-page: #f8fafc;
+    --card-bg: #ffffff;
+    --border-color: #e2e8f0;
+    --border-focus: #3b82f6;
+    
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --danger: #ef4444;
+    --danger-bg: #fef2f2;
+
+    --seg-living: #64748b;
+    --seg-savings: #059669;
+    --seg-loan: #ea580c;
+    --seg-remain: #2563eb;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text-main);
+    background-color: var(--bg-page);
+    line-height: 1.5;
+    padding-bottom: 3rem;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.header-tag {
+    display: inline-block;
+    background: #e0e7ff;
+    color: #4338ca;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 9999px;
+    margin-bottom: 0.5rem;
+}
+
+h1 {
+    font-size: 1.8rem;
+    color: #0f172a;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+/* Grid Layout */
+.grid-layout {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+@media (max-width: 950px) {
+    .grid-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Card */
+.card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-color);
+}
+
+.highlight-card {
+    border: 1.5px solid #bfdbfe;
+    background: #ffffff;
+}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.6rem;
+}
+
+.step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.9rem;
+    font-weight: bold;
+    border-radius: 50%;
+}
+
+.card-title h2 {
+    font-size: 1.15rem;
+    color: #0f172a;
+}
+
+.section-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+/* Tranche Table (3-Year Loan Inputs) */
+.tranche-table {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.tranche-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.2rem;
+}
+
+.tranche-header {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.4rem;
+}
+
+.col-year { width: 65px; font-weight: 700; font-size: 0.9rem; }
+.col-amount { flex: 1; }
+.col-rate { flex: 1; }
+
+.year-badge {
+    background: #e2e8f0;
+    color: #334155;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.82rem;
+}
+
+.input-with-unit.compact input {
+    padding: 0.5rem 0.6rem;
+    padding-right: 2.2rem;
+    font-size: 0.95rem;
+}
+
+.tranche-summary {
+    display: flex;
+    justify-content: space-between;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    padding: 0.6rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #1e40af;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.tranche-summary strong {
+    font-size: 1.05rem;
+    color: #1d4ed8;
+}
+
+/* Form Styles */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.mt-3 { margin-top: 1rem; }
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.col-half {
+    flex: 1;
+}
+
+label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: #374151;
+}
+
+.input-with-unit {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+input[type="number"] {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    padding-right: 4.5rem;
+    border: 1.5px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-main);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    background-color: #fff;
+}
+
+input[type="number"]:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.unit {
+    position: absolute;
+    right: 0.8rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+small {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* Net Income Box */
+.net-income-box {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 0.85rem;
+    margin-bottom: 1.2rem;
+}
+
+.net-income-header {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #166534;
+    margin-bottom: 0.4rem;
+}
+
+.net-income-values {
+    display: flex;
+    gap: 1.2rem;
+    font-size: 0.95rem;
+    color: #15803d;
+}
+
+.tax-note {
+    color: #16a34a;
+    font-size: 0.72rem;
+}
+
+/* Radio Tab Group */
+.radio-tab-group {
+    display: flex;
+    background: #e2e8f0;
+    padding: 3px;
+    border-radius: 8px;
+    margin-bottom: 0.8rem;
+}
+
+.radio-tab {
+    flex: 1;
+    text-align: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.radio-tab input {
+    display: none;
+}
+
+.radio-tab:has(input:checked) {
+    background: white;
+    color: var(--primary-color);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Early Repayment Toggle & Box */
+.early-repayment-toggle {
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+    border-top: 1px dashed var(--border-color);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.92rem;
+    color: #1d4ed8;
+}
+
+.checkbox-label input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.early-repayment-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 0.8rem;
+}
+
+.early-tip {
+    color: #3b82f6;
+    font-size: 0.75rem;
+}
+
+/* Expense Grid */
+.expense-inputs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem 1rem;
+}
+
+@media (max-width: 500px) {
+    .expense-inputs-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.total-expense-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    font-weight: 600;
+}
+
+.total-expense-bar strong {
+    font-size: 1.15rem;
+    color: var(--primary-color);
+}
+
+/* Calc Button */
+.calc-button {
+    width: 100%;
+    padding: 0.9rem;
+    background: var(--primary-color);
+    color: white;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    transition: background 0.15s;
+    margin-top: 0.5rem;
+}
+
+.calc-button:hover {
+    background: var(--primary-hover);
+}
+
+/* --- Results Column --- */
+.result-column {
+    position: sticky;
+    top: 1.5rem;
+}
+
+/* Judge Card */
+.result-card {
+    border-left: 6px solid var(--primary-color);
+    transition: border-color 0.3s;
+}
+
+.judge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.6rem;
+}
+
+.sub-badge {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.status-badge {
+    padding: 0.35rem 0.9rem;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: white;
+}
+
+.status-safe { background: var(--success); }
+.status-warning { background: var(--warning); color: #78350f; }
+.status-danger { background: var(--danger); }
+
+.judge-title {
+    font-size: 1.2rem;
+    margin-bottom: 0.4rem;
+}
+
+.judge-detail {
+    font-size: 0.9rem;
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+/* Compare Table (Early Repayment) */
+.early-effect-card {
+    background: #f0fdf4;
+    border: 1.5px solid #86efac;
+}
+
+.effect-header {
+    margin-bottom: 0.8rem;
+}
+
+.effect-tag {
+    display: inline-block;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    margin-bottom: 0.3rem;
+}
+
+.early-effect-card h3 {
+    font-size: 1.1rem;
+    color: #14532d;
+}
+
+.compare-table {
+    background: white;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 0.8rem;
+}
+
+.compare-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1.2fr;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.88rem;
+    border-bottom: 1px solid #f0fdf4;
+    align-items: center;
+}
+
+.compare-row:last-child {
+    border-bottom: none;
+}
+
+.compare-head {
+    background: #dcfce7;
+    font-weight: 700;
+    color: #166534;
+    font-size: 0.82rem;
+}
+
+.highlight-col {
+    background: #f0fdf4;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+}
+
+.effect-highlight-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+}
+
+.effect-summary-item {
+    background: white;
+    border: 1px solid #bbf7d0;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.effect-summary-item span {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.effect-summary-item strong {
+    font-size: 1.05rem;
+}
+
+/* Balance Card & Bar */
+.balance-card h3, .loan-summary-card h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0.8rem;
+    color: #0f172a;
+}
+
+.income-banner {
+    background: #1e293b;
+    color: white;
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+}
+
+.income-banner strong {
+    font-size: 1.15rem;
+    color: #38bdf8;
+}
+
+.stacked-bar-container {
+    margin-bottom: 1.2rem;
+}
+
+.stacked-bar {
+    height: 32px;
+    width: 100%;
+    background: #e2e8f0;
+    border-radius: 6px;
+    display: flex;
+    overflow: hidden;
+}
+
+.segment {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    transition: width 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.seg-living { background: var(--seg-living); }
+.seg-savings { background: var(--seg-savings); }
+.seg-loan { background: var(--seg-loan); }
+.seg-remain { background: var(--seg-remain); }
+
+.balance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1rem;
+    font-size: 0.88rem;
+    margin-bottom: 1rem;
+}
+
+.balance-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.highlight-remain {
+    grid-column: span 2;
+    background: #eff6ff;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.dot-living { background: var(--seg-living); }
+.dot-savings { background: var(--seg-savings); }
+.dot-loan { background: var(--seg-loan); }
+.dot-remain { background: var(--seg-remain); }
+
+.dti-box {
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.8rem;
+    font-size: 0.85rem;
+}
+
+.dti-metric strong {
+    font-size: 1.05rem;
+    margin-left: 0.3rem;
+}
+
+/* Loan Summary List */
+.summary-list {
+    font-size: 0.9rem;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.summary-row.total-row {
+    border-bottom: none;
+    padding-top: 0.8rem;
+    font-size: 1.05rem;
+}
+
+.text-primary { color: var(--primary-color); }
+.text-danger { color: var(--danger); }
+.text-success { color: var(--success); }

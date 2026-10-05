@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学費ローン（3年間分割借入対応）＆生活設計シミュレーター</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-tag">3回分割借入＆金利変動・繰上げ返済対応</div>
+            <h1>学費ローン＆生活安心シミュレーター</h1>
+            <p class="subtitle">年次ごとの借入額・金利の違い、将来の手取り年収、詳細な生活費から「無理なく返済できるか」「繰上げ返済の効果」を精密診断します。</p>
+        </header>
+
+        <main class="grid-layout">
+            <!-- 左カラム：入力エリア -->
+            <div class="input-column">
+                
+                <!-- 1. 学費ローン借入条件 (年次ごとの3パターン金利・借入額) -->
+                <section class="card input-card highlight-card">
+                    <div class="card-title">
+                        <span class="step-num">1</span>
+                        <h2>学費ローンの借入条件（年次別 3回借入）</h2>
+                    </div>
+                    <p class="section-desc">毎年借りる金額と、その年の決定金利を入力してください。（デフォルト: 各年146万円）</p>
+
+                    <div class="tranche-table">
+                        <div class="tranche-row tranche-header">
+                            <span class="col-year">年次</span>
+                            <span class="col-amount">借入金額 (万円)</span>
+                            <span class="col-rate">金利 (年利 %)</span>
+                        </div>
+
+                        <!-- 1年目 -->
+                        <div class="tranche-row">
+                            <div class="col-year year-badge">1年目</div>
+                            <div class="col-amount">
+                                <div class="input-with-unit compact">
+                                    <input type="number" id="loanAmount1" class="tranche-input" value="146" min="0" step="1">
+                                    <span class="unit">万</span>
+                                </div>
+                            </div>
+                            <div class="col-rate">
+                                <div class="input-with-unit compact">
+                                    <input type="number" id="interestRate1" class="tranche-input" value="1.8" min="0" max="20" step="0.1">
+                                    <span class="unit">%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2年目 -->
+                        <div class="tranche-row">
+                            <div class="col-year year-badge">2年目</div>
+                            <div class="col-amount">
+                                <div class="input-with-unit compact">
+                                    <input type="number" id="loanAmount2" class="tranche-input" value="146" min="0" step="1">
+                                    <span class="unit">万</span>
+                                </div>
+                            </div>
+                            <div class="col-rate">
+                                <div class="input-with-unit compact">
+                                    <input type="number" id="interestRate2" class="tranche-input" value="2.2" min="0" max="20" step="0.1">
+                                    <span class="unit">%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3年目 -->
+                        <div class="tranche-row">
+                            <div class="col-year year-badge">3年目</div>
+                            <div class="col-amount">
+                                <div class="input-with-unit compact">
+                                    <input type="number" id="loanAmount3" class="tranche-input" value="146" min="0" step="1">
+                                    <span class="unit">万</span>
+                                </div>
+                            </div>
+                            <div class="col-rate">
+                                <div class="input-with-unit compact">
+                                    <input type="number" id="interestRate3" class="tranche-input" value="2.6" min="0" max="20" step="0.1">
+                                    <span class="unit">%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 借入合計情報 -->
+                    <div class="tranche-summary">
+                        <div>借入総額: <strong id="totalLoanAmountDisplay">438 万円</strong></div>
+                        <div>加重平均金利: <strong id="avgInterestRateDisplay">2.20 %</strong></div>
+                    </div>
+
+                    <!-- 返済方式の選択 -->
+                    <div class="form-group mt-3">
+                        <label>返済額の決め方</label>
+                        <div class="radio-tab-group">
+                            <label class="radio-tab">
+                                <input type="radio" name="calcMode" value="byYears" checked>
+                                <span>返済期間（年数）で指定</span>
+                            </label>
+                            <label class="radio-tab">
+                                <input type="radio" name="calcMode" value="byMonthlyPayment">
+                                <span>毎月の希望返済額で指定</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="groupRepaymentYears">
+                        <label for="repaymentYears">返済期間</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="repaymentYears" value="15" min="1" max="40" step="1">
+                            <span class="unit">年 (180回)</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="groupCustomMonthly" style="display: none;">
+                        <label for="customMonthlyPayment">毎月の希望返済額</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="customMonthlyPayment" value="3.0" min="0.5" max="100" step="0.5">
+                            <span class="unit">万円 / 月</span>
+                        </div>
+                    </div>
+
+                    <!-- 繰上げ返済設定セクション -->
+                    <div class="early-repayment-toggle">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="enableEarlyRepayment" checked>
+                            <span class="bold-label">⚡ 繰上げ返済シミュレーションを適用する</span>
+                        </label>
+                    </div>
+
+                    <div class="early-repayment-box" id="earlyRepaymentBox">
+                        <div class="form-row">
+                            <div class="form-group col-half">
+                                <label for="earlyRepaymentYear">返済開始から何年後？</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="earlyRepaymentYear" value="3" min="1" max="35" step="1">
+                                    <span class="unit">年後</span>
+                                </div>
+                            </div>
+                            <div class="form-group col-half">
+                                <label for="earlyRepaymentAmount">繰上げ返済額</label>
+                                <div class="input-with-unit">
+                                    <input type="number" id="earlyRepaymentAmount" value="50" min="1" max="1000" step="5">
+                                    <span class="unit">万円</span>
+                                </div>
+                            </div>
+                        </div>
+                        <small class="early-tip">※期間短縮型（高金利の年次分から優先返済して利息を最大削減する方式）で計算</small>
+                    </div>
+                </section>
+
+                <!-- 2. 年収・手取り・貯蓄設定 -->
+                <section class="card input-card">
+                    <div class="card-title">
+                        <span class="step-num">2</span>
+                        <h2>収入と貯金の設定</h2>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="annualIncome">想定年収（額面）</label>
+                        <div class="input-with-unit">
+                            <input type="number" id="annualIncome" value="350" min="50" max="3000" step="10">
+                            <span class="unit">万円 / 年</span>
+                        </div>
+                    </div>
+
+                    <!-- 手取り概算プレビュー -->
+                    <div class="net-income-box">
+                        <div class="net-income-header">
+                            <span>💡 推定手取り（税金・社会保険料控除後）</span>
+                        </div>
+                        <div class="net-income-values">
+                            <div>手取り年収: <strong id="previewNetAnnual">約280万円</strong></div>
+                            <div>手取り月収目安: <strong id="previewNetMonthly">約23.3万円</strong></div>
+                        </div>
+                        <small class="tax-note">※給与所得控除、社会保険料（健康・厚生年金・雇用）、所得税・住民税を自動控除</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-half">
+                            <label for="currentSavings">現在の貯金額</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="currentSavings" value="50" min="0" step="5">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+                        <div class="form-group col-half">
+                            <label for="targetMonthlySavings">毎月の目標貯金額</label>
+                            <div class="input-with-unit">
+                                <input type="number" id="targetMonthlySavings" value="2" min="0" step="0.5">
+                                <span class="unit">万円 / 月</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. 詳細な生活費 -->
+                <section class="card input-card">
+                    <div class="card-title">
+                        <span class="step-num">3</span>
+                        <h2>月々の生活費の内訳（一人暮らし平均）</h2>
+                    </div>
+
+                    <div class="expense-inputs-grid">
+                        <div class="form-group">
+                            <label for="costRent">家賃・管理費</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costRent" value="6.5" min="0" step="0.5">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="costUtility">水道・光熱費 (電気/ガス/水道)</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costUtility" value="1.2" min="0" step="0.1">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="costFood">食費</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costFood" value="3.5" min="0" step="0.5">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="costMobile">スマホ代（携帯料金）</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costMobile" value="0.4" min="0" step="0.1">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="costWifi">自宅WiFi・ネット通信費</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costWifi" value="0.4" min="0" step="0.1">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="costSocial">交際費・接待・娯楽費</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costSocial" value="2.0" min="0" step="0.5">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="costMisc">日用品・雑費・被服費など</label>
+                            <div class="input-with-unit">
+                                <input type="number" class="expense-field" id="costMisc" value="1.5" min="0" step="0.5">
+                                <span class="unit">万円</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="total-expense-bar">
+                        <span>生活費 合計（月額）:</span>
+                        <strong id="totalLivingCostDisplay">15.5 万円</strong>
+                    </div>
+                </section>
+
+                <button id="calculateBtn" class="calc-button">リアルタイムシミュレーション診断</button>
+            </div>
+
+            <!-- 右カラム：診断結果・分析エリア -->
+            <div class="result-column">
+                
+                <!-- 総合判定バッジ & 総評 -->
+                <div class="card result-card" id="judgeCard">
+                    <div class="judge-header">
+                        <span class="sub-badge">将来の生活安心度診断</span>
+                        <div class="status-badge" id="statusBadge">判定中</div>
+                    </div>
+                    <h3 id="judgeTitle" class="judge-title">---</h3>
+                    <p id="judgeDetail" class="judge-detail">---</p>
+                </div>
+
+                <!-- 繰上げ返済の効果（ビフォーアフター比較） -->
+                <div class="card early-effect-card" id="earlyEffectCard">
+                    <div class="effect-header">
+                        <span class="effect-tag">繰上げ返済のメリット効果</span>
+                        <h3>💡 繰上げ返済ビフォー・アフター比較</h3>
+                    </div>
+
+                    <div class="compare-table">
+                        <div class="compare-row compare-head">
+                            <span>項目</span>
+                            <span>通常返済</span>
+                            <span class="highlight-col">繰上げ返済後</span>
+                        </div>
+                        <div class="compare-row">
+                            <span>完済までの期間</span>
+                            <span id="cmpOrigPeriod">15年0ヶ月</span>
+                            <strong class="highlight-col text-primary" id="cmpNewPeriod">13年2ヶ月</strong>
+                        </div>
+                        <div class="compare-row">
+                            <span>総利息額</span>
+                            <span id="cmpOrigInterest">78.5 万円</span>
+                            <strong class="highlight-col text-success" id="cmpNewInterest">62.3 万円</strong>
+                        </div>
+                        <div class="compare-row">
+                            <span>総支払額</span>
+                            <span id="cmpOrigTotal">516.5 万円</span>
+                            <strong class="highlight-col" id="cmpNewTotal">500.3 万円</strong>
+                        </div>
+                    </div>
+
+                    <div class="effect-highlight-box">
+                        <div class="effect-summary-item">
+                            <span>利息の節約額:</span>
+                            <strong class="text-success" id="resSavedInterest">約 16.2 万円 おトク</strong>
+                        </div>
+                        <div class="effect-summary-item">
+                            <span>返済期間の短縮:</span>
+                            <strong class="text-primary" id="resShortenedTime">1 年 10 ヶ月 短縮！</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 月々の収支バランスメーター -->
+                <div class="card balance-card">
+                    <h3>月々の手取りと支出の内訳イメージ</h3>
+                    <div class="income-banner">
+                        <span>手取り月収: <strong id="resNetIncome">23.3</strong> 万円</span>
+                    </div>
+
+                    <div class="stacked-bar-container">
+                        <div class="stacked-bar" id="stackedBar">
+                            <div class="segment seg-living" id="segLiving" title="生活費">生活費</div>
+                            <div class="segment seg-savings" id="segSavings" title="目標貯金">貯金</div>
+                            <div class="segment seg-loan" id="segLoan" title="ローン返済">返済</div>
+                            <div class="segment seg-remain" id="segRemain" title="残り自由資金">余剰</div>
+                        </div>
+                    </div>
+
+                    <div class="balance-grid">
+                        <div class="balance-item">
+                            <span class="dot dot-living"></span>
+                            <span>生活費合計:</span>
+                            <strong id="resLivingCost">15.5 万円</strong>
+                        </div>
+                        <div class="balance-item">
+                            <span class="dot dot-loan"></span>
+                            <span>ローン月返済:</span>
+                            <strong id="resMonthlyLoan">2.8 万円</strong>
+                        </div>
+                        <div class="balance-item">
+                            <span class="dot dot-savings"></span>
+                            <span>毎月の貯金:</span>
+                            <strong id="resSavings">2.0 万円</strong>
+                        </div>
+                        <div class="balance-item highlight-remain">
+                            <span class="dot dot-remain"></span>
+                            <span>毎月の手残り（自由資金）:</span>
+                            <strong id="resFreeMoney">+3.0 万円</strong>
+                        </div>
+                    </div>
+
+                    <div class="dti-box">
+                        <div class="dti-metric">
+                            <span>手取りに対するローン返済負担率:</span>
+                            <strong id="resDtiRatio">12.0%</strong>
+                            <small id="dtiComment">（20%未満は安全圏です）</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ローン返済計画の数値サマリー -->
+                <div class="card loan-summary-card">
+                    <h3>ローン返済計画サマリー（3回分合算）</h3>
+                    <div class="summary-list">
+                        <div class="summary-row">
+                            <span>借入総元金:</span>
+                            <span id="resLoanAmount">438.0 万円</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>月々の返済額:</span>
+                            <strong class="text-primary" id="resMonthlyPaymentVal">28,500 円</strong>
+                        </div>
+                        <div class="summary-row">
+                            <span>総利息額（通常時）:</span>
+                            <span class="text-danger" id="resTotalInterestVal">78.5 万円</span>
+                        </div>
+                        <div class="summary-row total-row">
+                            <span>総返済額（通常時）:</span>
+                            <strong id="resTotalPaymentVal">516.5 万円</strong>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
