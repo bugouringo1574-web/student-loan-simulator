@@ -56,9 +56,9 @@ function calculateNetIncome(grossAnnualMan) {
 }
 
 // ==========================================
-// 2. 単一ローンの月々返済額計算 (元利均等)
+// 2. 単一ローンの月々返済額計算 (元利均等 PMT)
 // ==========================================
-function calcTrancheMonthlyPMT(principal, annualRatePct, months) {
+function calcPMT(principal, annualRatePct, months) {
     if (principal <= 0 || months <= 0) return 0;
     const r = (annualRatePct / 100) / 12;
     if (r === 0) return principal / months;
@@ -66,37 +66,26 @@ function calcTrancheMonthlyPMT(principal, annualRatePct, months) {
 }
 
 // ==========================================
-// 3. 3回分割借入ローンの詳細シミュレーション
+// 3. 3回分割借入＆繰上げ返済（期間短縮/返済額軽減）シミュレーション
 // ==========================================
-function simulate3TrancheLoan(tranches, repaymentYears, customMonthlyPaymentYen, calcMode, earlyRepayment) {
+function simulateLoans(tranches, repaymentYears, customMonthlyPaymentYen, calcMode, earlyRepayment) {
     const totalPrincipal = tranches.reduce((sum, t) => sum + t.amount, 0);
-    if (totalPrincipal <= 0) {
-        return {
-            totalPrincipal: 0,
-            baseMonthlyPayment: 0,
-            baseTotalMonths: 0,
-            baseTotalInterest: 0,
-            baseTotalPayment: 0,
-            earlyResult: null
-        };
-    }
+    if (totalPrincipal <= 0) return null;
 
-    let baseMonthlyPayment = 0;
     let baseTotalMonths = 0;
+    let baseMonthlyPayment = 0;
     let tranchesPMT = [];
 
     if (calcMode === 'byYears') {
         baseTotalMonths = Math.max(1, Math.round(repaymentYears * 12));
-        tranchesPMT = tranches.map(t => calcTrancheMonthlyPMT(t.amount, t.rate, baseTotalMonths));
+        tranchesPMT = tranches.map(t => calcPMT(t.amount, t.rate, baseTotalMonths));
         baseMonthlyPayment = tranchesPMT.reduce((a, b) => a + b, 0);
     } else {
         baseMonthlyPayment = customMonthlyPaymentYen;
-        // 月々返済額から必要月数をシミュレート
-        const minMonthlyInterest = tranches.reduce((sum, t) => sum + (t.amount * (t.rate / 100 / 12)), 0);
-        if (baseMonthlyPayment <= minMonthlyInterest) {
+        const minInterest = tranches.reduce((sum, t) => sum + (t.amount * (t.rate / 100 / 12)), 0);
+        if (baseMonthlyPayment <= minInterest) {
             return { error: '月々の希望返済額が金利利息を下回っているため完済できません。返済額を増やしてください。' };
         }
-        // 各年次の比率に応じて月数を概算
         let maxMonths = 1;
         tranches.forEach(t => {
             if (t.amount > 0) {
@@ -109,125 +98,158 @@ function simulate3TrancheLoan(tranches, repaymentYears, customMonthlyPaymentYen,
             }
         });
         baseTotalMonths = Math.min(600, maxMonths);
-        tranchesPMT = tranches.map(t => calcTrancheMonthlyPMT(t.amount, t.rate, baseTotalMonths));
+        tranchesPMT = tranches.map(t => calcPMT(t.amount, t.rate, baseTotalMonths));
         baseMonthlyPayment = tranchesPMT.reduce((a, b) => a + b, 0);
     }
 
-    // --- 通常返済（繰上げなし）の月次シミュレーション ---
-    let simTranches = tranches.map((t, idx) => ({
-        principal: t.amount,
-        rate: t.rate,
-        balance: t.amount,
-        pmt: tranchesPMT[idx]
-    }));
-
+    // --- A. 通常返済シミュレーション (Base) ---
+    let baseTranches = tranches.map(t => ({ principal: t.amount, rate: t.rate, balance: t.amount }));
+    let baseMonthlyHistory = [];
     let baseTotalInterest = 0;
     let baseActualMonths = 0;
 
     for (let m = 1; m <= 600; m++) {
-        let allZero = true;
-        let monthlyInterestSum = 0;
-
-        simTranches.forEach(t => {
-            if (t.balance > 0.01) {
-                allZero = false;
+        let monthInterest = 0;
+        let active = false;
+        baseTranches.forEach(t => {
+            if (t.balance > 0.001) {
+                active = true;
                 const r = (t.rate / 100) / 12;
                 const interest = t.balance * r;
-                monthlyInterestSum += interest;
-                const principalPart = Math.min(t.balance, t.pmt - interest);
-                t.balance -= principalPart;
-                if (t.balance < 0.01) t.balance = 0;
+                monthInterest += interest;
+                t.balance += interest;
             }
         });
 
-        if (allZero) break;
-        baseTotalInterest += monthlyInterestSum;
+        if (!active) break;
+        baseTotalInterest += monthInterest;
         baseActualMonths = m;
+
+        // 返済充当 (高金利優先)
+        let budget = baseMonthlyPayment;
+        baseTranches.sort((a, b) => b.rate - a.rate);
+        let actualPaid = 0;
+        baseTranches.forEach(t => {
+            if (budget > 0 && t.balance > 0) {
+                const pay = Math.min(t.balance, budget);
+                t.balance -= pay;
+                budget -= pay;
+                actualPaid += pay;
+                if (t.balance < 0.001) t.balance = 0;
+            }
+        });
+
+        const currentTotalBalance = baseTranches.reduce((sum, t) => sum + t.balance, 0);
+        baseMonthlyHistory.push({
+            month: m,
+            balance: currentTotalBalance,
+            interest: monthInterest,
+            payment: actualPaid,
+            lumpSum: 0
+        });
     }
 
     const baseTotalPayment = totalPrincipal + baseTotalInterest;
 
-    // --- 繰上げ返済ありのシミュレーション ---
+    // --- B. 繰上げ返済シミュレーション (Early Repayment) ---
     let earlyResult = null;
+    let earlyMonthlyHistory = [];
+
     if (earlyRepayment && earlyRepayment.enabled && earlyRepayment.amount > 0) {
         const earlyMonth = Math.round(earlyRepayment.year * 12);
-        
-        if (earlyMonth >= baseActualMonths) {
-            earlyResult = { error: '繰上げ返済の年数は完済予定より前の年数を指定してください。' };
-        } else {
-            let earlyTranches = tranches.map((t, idx) => ({
-                id: idx,
-                principal: t.amount,
-                rate: t.rate,
-                balance: t.amount,
-                pmt: tranchesPMT[idx]
-            }));
+        const earlyType = earlyRepayment.type || 'shorten'; // 'shorten' or 'reduce'
 
+        if (earlyMonth >= baseActualMonths) {
+            earlyResult = { error: '繰上げ返済の時期は完済予定月より前の時期を指定してください。' };
+        } else {
+            let curTranches = tranches.map(t => ({ principal: t.amount, rate: t.rate, balance: t.amount }));
             let earlyTotalInterest = 0;
             let earlyActualMonths = 0;
-            let totalPaidSoFar = 0;
+            let currentPMT = baseMonthlyPayment;
+            let newMonthlyPaymentAfterEarly = baseMonthlyPayment;
 
-            // 1ヶ月目 〜 earlyMonth まで通常返済
-            for (let m = 1; m <= earlyMonth; m++) {
-                let allZero = true;
-                simTranches.forEach(t => {
-                    if (t.balance > 0.01) {
-                        allZero = false;
+            for (let m = 1; m <= 600; m++) {
+                let monthInterest = 0;
+                let active = false;
+
+                curTranches.forEach(t => {
+                    if (t.balance > 0.001) {
+                        active = true;
                         const r = (t.rate / 100) / 12;
                         const interest = t.balance * r;
-                        earlyTotalInterest += interest;
-                        const principalPart = Math.min(t.balance, t.pmt - interest);
-                        t.balance -= principalPart;
-                        totalPaidSoFar += (interest + principalPart);
-                        if (t.balance < 0.01) t.balance = 0;
+                        monthInterest += interest;
+                        t.balance += interest;
                     }
                 });
-                earlyActualMonths = m;
-                if (allZero) break;
-            }
 
-            // earlyMonth 時点で繰上げ返済を実行（高金利のローンから優先して返済）
-            let lumpSum = earlyRepayment.amount;
-            // 金利の高い順にソート
-            let sortedByRate = [...earlyTranches].sort((a, b) => b.rate - a.rate);
-            
-            sortedByRate.forEach(t => {
-                if (lumpSum > 0 && t.balance > 0) {
-                    const pay = Math.min(t.balance, lumpSum);
-                    t.balance -= pay;
-                    lumpSum -= pay;
+                if (!active) break;
+                earlyTotalInterest += monthInterest;
+                earlyActualMonths = m;
+
+                let lumpSumThisMonth = 0;
+
+                // 指定月に繰上げ返済を実行
+                if (m === earlyMonth) {
+                    let lump = earlyRepayment.amount;
+                    curTranches.sort((a, b) => b.rate - a.rate);
+                    curTranches.forEach(t => {
+                        if (lump > 0 && t.balance > 0) {
+                            const pay = Math.min(t.balance, lump);
+                            t.balance -= pay;
+                            lump -= pay;
+                            lumpSumThisMonth += pay;
+                            if (t.balance < 0.001) t.balance = 0;
+                        }
+                    });
+
+                    // 返済額軽減型の場合、残存期間で各トランチの月々返済額を再計算
+                    if (earlyType === 'reduce') {
+                        const remainMonths = Math.max(1, baseActualMonths - earlyMonth);
+                        const newTranchesPMT = curTranches.map(t => calcPMT(t.balance, t.rate, remainMonths));
+                        newMonthlyPaymentAfterEarly = newTranchesPMT.reduce((a, b) => a + b, 0);
+                        currentPMT = newMonthlyPaymentAfterEarly;
+                    }
                 }
-            });
 
-            // 残りの期間をシミュレーション（期間短縮型: 各トランチのPMTを維持し、完済したものから抜ける）
-            for (let m = earlyMonth + 1; m <= 600; m++) {
-                let allZero = true;
-                earlyTranches.forEach(t => {
-                    if (t.balance > 0.01) {
-                        allZero = false;
-                        const r = (t.rate / 100) / 12;
-                        const interest = t.balance * r;
-                        earlyTotalInterest += interest;
-                        const principalPart = Math.min(t.balance, t.pmt - interest);
-                        t.balance -= principalPart;
-                        if (t.balance < 0.01) t.balance = 0;
+                // 通常月返済の充当
+                let budget = currentPMT;
+                curTranches.sort((a, b) => b.rate - a.rate);
+                let regularPaid = 0;
+                curTranches.forEach(t => {
+                    if (budget > 0 && t.balance > 0) {
+                        const pay = Math.min(t.balance, budget);
+                        t.balance -= pay;
+                        budget -= pay;
+                        regularPaid += pay;
+                        if (t.balance < 0.001) t.balance = 0;
                     }
                 });
 
-                if (allZero) break;
-                earlyActualMonths = m;
+                const currentTotalBalance = curTranches.reduce((sum, t) => sum + t.balance, 0);
+                earlyMonthlyHistory.push({
+                    month: m,
+                    balance: currentTotalBalance,
+                    interest: monthInterest,
+                    payment: regularPaid + lumpSumThisMonth,
+                    lumpSum: lumpSumThisMonth
+                });
             }
 
             const earlyTotalPayment = totalPrincipal + earlyTotalInterest;
             const savedInterest = Math.max(0, baseTotalInterest - earlyTotalInterest);
             const shortenedMonths = Math.max(0, baseActualMonths - earlyActualMonths);
+            const reducedMonthlyPayment = Math.max(0, baseMonthlyPayment - newMonthlyPaymentAfterEarly);
 
             earlyResult = {
+                type: earlyType,
                 newTotalMonths: earlyActualMonths,
                 newTotalInterest: earlyTotalInterest,
                 newTotalPayment: earlyTotalPayment,
                 savedInterest: savedInterest,
-                shortenedMonths: shortenedMonths
+                shortenedMonths: shortenedMonths,
+                newMonthlyPayment: newMonthlyPaymentAfterEarly,
+                reducedMonthlyPayment: reducedMonthlyPayment,
+                history: earlyMonthlyHistory
             };
         }
     }
@@ -238,13 +260,151 @@ function simulate3TrancheLoan(tranches, repaymentYears, customMonthlyPaymentYen,
         baseTotalMonths: baseActualMonths,
         baseTotalInterest,
         baseTotalPayment,
+        baseHistory: baseMonthlyHistory,
         earlyResult
     };
 }
 
 // ==========================================
-// 4. メインUI更新処理
+// 4. SVGチャートの描画
 // ==========================================
+function renderLoanChart(baseHistory, earlyHistory, totalPrincipal, earlyYear) {
+    const svg = document.getElementById('loanChartSvg');
+    if (!svg || !baseHistory || baseHistory.length === 0) return;
+
+    const maxMonths = Math.max(baseHistory.length, earlyHistory ? earlyHistory.length : 0, 12);
+    const maxBalance = totalPrincipal;
+
+    const width = 450;
+    const height = 180;
+    const padding = { top: 15, right: 20, bottom: 25, left: 45 };
+
+    const plotWidth = width - padding.left - padding.right;
+    const plotHeight = height - padding.top - padding.bottom;
+
+    const getX = (month) => padding.left + (month / maxMonths) * plotWidth;
+    const getY = (bal) => padding.top + plotHeight - (bal / maxBalance) * plotHeight;
+
+    // 背景グリッドと目盛り
+    let svgContent = '';
+
+    // 水平グリッド (残高)
+    for (let i = 0; i <= 4; i++) {
+        const val = (maxBalance / 4) * i;
+        const y = getY(val);
+        svgContent += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#f1f5f9" stroke-width="1" />`;
+        svgContent += `<text x="${padding.left - 6}" y="${y + 4}" font-size="9" fill="#94a3b8" text-anchor="end">${Math.round(val / 10000)}万</text>`;
+    }
+
+    // 垂直グリッド (年数)
+    const maxYears = Math.ceil(maxMonths / 12);
+    const yearStep = maxYears > 20 ? 5 : (maxYears > 10 ? 2 : 1);
+    for (let yr = 0; yr <= maxYears; yr += yearStep) {
+        const x = getX(yr * 12);
+        if (x <= width - padding.right) {
+            svgContent += `<line x1="${x}" y1="${padding.top}" x2="${x}" y2="${height - padding.bottom}" stroke="#f8fafc" stroke-width="1" />`;
+            svgContent += `<text x="${x}" y="${height - 8}" font-size="9" fill="#94a3b8" text-anchor="middle">${yr}年</text>`;
+        }
+    }
+
+    // 通常返済パス
+    let basePathD = `M ${getX(0)} ${getY(totalPrincipal)}`;
+    baseHistory.forEach(h => {
+        basePathD += ` L ${getX(h.month)} ${getY(h.balance)}`;
+    });
+    svgContent += `<path d="${basePathD}" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="4,2" />`;
+
+    // 繰上げ返済パス
+    if (earlyHistory && earlyHistory.length > 0) {
+        let earlyPathD = `M ${getX(0)} ${getY(totalPrincipal)}`;
+        let earlyAreaD = `M ${getX(0)} ${getY(totalPrincipal)}`;
+
+        earlyHistory.forEach(h => {
+            const px = getX(h.month);
+            const py = getY(h.balance);
+            earlyPathD += ` L ${px} ${py}`;
+            earlyAreaD += ` L ${px} ${py}`;
+        });
+
+        const lastPoint = earlyHistory[earlyHistory.length - 1];
+        earlyAreaD += ` L ${getX(lastPoint.month)} ${getY(0)} L ${getX(0)} ${getY(0)} Z`;
+
+        // 塗りつぶしグラデーション
+        svgContent += `
+            <defs>
+                <linearGradient id="earlyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#10b981" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
+                </linearGradient>
+            </defs>
+            <path d="${earlyAreaD}" fill="url(#earlyGrad)" />
+            <path d="${earlyPathD}" fill="none" stroke="#10b981" stroke-width="3" />
+        `;
+
+        // 繰上げ返済実行ポイントのマーカー
+        const earlyMonth = Math.round(earlyYear * 12);
+        const matchPt = earlyHistory.find(h => h.month === earlyMonth);
+        if (matchPt) {
+            const mx = getX(matchPt.month);
+            const my = getY(matchPt.balance);
+            svgContent += `
+                <circle cx="${mx}" cy="${my}" r="4.5" fill="#059669" stroke="#ffffff" stroke-width="2" />
+                <text x="${mx}" y="${my - 8}" font-size="9" font-weight="bold" fill="#059669" text-anchor="middle">⚡ 繰上げ実行</text>
+            `;
+        }
+    }
+
+    svg.innerHTML = svgContent;
+}
+
+// ==========================================
+// 5. 年次返済スケジュールのレンダリング
+// ==========================================
+function renderYearlySchedule(baseHistory, earlyHistory) {
+    const tbody = document.getElementById('yearlyScheduleBody');
+    if (!tbody) return;
+
+    const hist = (earlyHistory && earlyHistory.length > 0) ? earlyHistory : baseHistory;
+    if (!hist || hist.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">データがありません</td></tr>';
+        return;
+    }
+
+    let rowsHtml = '';
+    const totalYears = Math.ceil(hist.length / 12);
+
+    for (let yr = 1; yr <= totalYears; yr++) {
+        const startIdx = (yr - 1) * 12;
+        const endIdx = Math.min(yr * 12, hist.length);
+        const yearSlice = hist.slice(startIdx, endIdx);
+
+        const yearPayment = yearSlice.reduce((sum, m) => sum + m.payment, 0);
+        const yearInterest = yearSlice.reduce((sum, m) => sum + m.interest, 0);
+        const yearLumpSum = yearSlice.reduce((sum, m) => sum + (m.lumpSum || 0), 0);
+        const endBalance = yearSlice[yearSlice.length - 1].balance;
+
+        const isEarlyYear = yearLumpSum > 0;
+        const rowClass = isEarlyYear ? 'class="early-applied-row"' : '';
+
+        rowsHtml += `
+            <tr ${rowClass}>
+                <td>${yr}年目</td>
+                <td>${(yearPayment / 10000).toFixed(1)}万</td>
+                <td>${(yearInterest / 10000).toFixed(1)}万</td>
+                <td>${yearLumpSum > 0 ? `+${(yearLumpSum / 10000).toFixed(0)}万` : '-'}</td>
+                <td><strong>${(endBalance / 10000).toFixed(1)}万</strong></td>
+            </tr>
+        `;
+    }
+
+    tbody.innerHTML = rowsHtml;
+}
+
+// ==========================================
+// 6. メインUI更新処理
+// ==========================================
+let currentViewMode = 'base'; // 'base' or 'early'
+
 function updateSimulator() {
     // --- 1. 収入と手取り ---
     const grossIncomeMan = parseFloat(document.getElementById('annualIncome').value) || 0;
@@ -303,67 +463,131 @@ function updateSimulator() {
     const customMonthlyPaymentYen = (parseFloat(document.getElementById('customMonthlyPayment').value) || 3) * 10000;
 
     const enableEarly = document.getElementById('enableEarlyRepayment').checked;
+    const earlyTypeElem = document.querySelector('input[name="earlyType"]:checked');
+    const earlyType = earlyTypeElem ? earlyTypeElem.value : 'shorten';
     const earlyRepaymentYear = parseFloat(document.getElementById('earlyRepaymentYear').value) || 3;
-    const earlyRepaymentAmountYen = (parseFloat(document.getElementById('earlyRepaymentAmount').value) || 50) * 10000;
+    const earlyRepaymentAmountMan = parseFloat(document.getElementById('earlyRepaymentAmount').value) || 100;
+    const earlyRepaymentAmountYen = earlyRepaymentAmountMan * 10000;
+
+    // 繰上げ返済のアドバイス表示
+    const earlyAdviceBox = document.getElementById('earlyAdviceBox');
+    const expectedSavingsAtYear = currentSavingsMan + (targetMonthlySavingsMan * 12 * earlyRepaymentYear);
+    if (expectedSavingsAtYear < earlyRepaymentAmountMan) {
+        earlyAdviceBox.innerHTML = `⚠️ <span style="color:var(--danger-dark); font-weight:bold;">貯蓄不足に注意:</span> ${earlyRepaymentYear}年後の想定貯金（約${expectedSavingsAtYear.toFixed(0)}万円）に対し、繰上げ返済額（${earlyRepaymentAmountMan}万円）が上回っています。`;
+    } else {
+        earlyAdviceBox.innerHTML = `💡 <span style="color:var(--success-dark); font-weight:bold;">貯蓄計画と両立可能:</span> ${earlyRepaymentYear}年後の想定貯金（約${expectedSavingsAtYear.toFixed(0)}万円）から無理なく拠出可能です。高金利トランチ（3年目等）から優先充当されます。`;
+    }
 
     const earlyRepaymentConfig = {
         enabled: enableEarly,
+        type: earlyType,
         year: earlyRepaymentYear,
         amount: earlyRepaymentAmountYen
     };
 
-    const sim = simulate3TrancheLoan(tranches, repaymentYears, customMonthlyPaymentYen, calcMode, earlyRepaymentConfig);
+    const sim = simulateLoans(tranches, repaymentYears, customMonthlyPaymentYen, calcMode, earlyRepaymentConfig);
 
+    if (!sim) return;
     if (sim.error) {
         alert(sim.error);
         return;
     }
 
-    // 通常時の結果反映
-    const monthlyPaymentYen = sim.baseMonthlyPayment;
-    const monthlyLoanMan = monthlyPaymentYen / 10000;
-    const totalInterestMan = sim.baseTotalInterest / 10000;
-    const totalPaymentMan = sim.baseTotalPayment / 10000;
+    // --- 5. 繰上げ返済カード＆比較の更新 ---
+    const earlyCard = document.getElementById('earlyEffectCard');
+    const tabEarly = document.getElementById('tabViewEarly');
+    const er = sim.earlyResult;
+
+    const baseMonthlyPaymentYen = sim.baseMonthlyPayment;
+    const baseMonthlyLoanMan = baseMonthlyPaymentYen / 10000;
+    const baseTotalInterestMan = sim.baseTotalInterest / 10000;
+    const baseTotalPaymentMan = sim.baseTotalPayment / 10000;
 
     const baseYears = Math.floor(sim.baseTotalMonths / 12);
     const baseRemainMonths = sim.baseTotalMonths % 12;
-    const basePeriodStr = `${baseYears}年${baseRemainMonths}ヶ月 (${sim.baseTotalMonths}回)`;
 
-    document.getElementById('resMonthlyPaymentVal').textContent = `${Math.round(monthlyPaymentYen).toLocaleString()} 円`;
-    document.getElementById('resMonthlyLoan').textContent = `${monthlyLoanMan.toFixed(1)} 万円`;
-    document.getElementById('resTotalInterestVal').textContent = `${totalInterestMan.toFixed(1)} 万円`;
-    document.getElementById('resTotalPaymentVal').textContent = `${totalPaymentMan.toFixed(1)} 万円`;
-    document.getElementById('resSavings').textContent = `${targetMonthlySavingsMan.toFixed(1)} 万円`;
-
-    // --- 5. 繰上げ返済カードの更新 ---
-    const earlyCard = document.getElementById('earlyEffectCard');
-    if (enableEarly && sim.earlyResult && !sim.earlyResult.error) {
+    if (enableEarly && er && !er.error) {
         earlyCard.style.display = 'block';
-        const er = sim.earlyResult;
+        tabEarly.style.display = 'block';
 
         const newYears = Math.floor(er.newTotalMonths / 12);
         const newRemainMonths = er.newTotalMonths % 12;
-
         const sYears = Math.floor(er.shortenedMonths / 12);
         const sMonths = er.shortenedMonths % 12;
+
+        const newMonthlyPaymentYen = er.newMonthlyPayment;
+        const newMonthlyLoanMan = newMonthlyPaymentYen / 10000;
 
         document.getElementById('cmpOrigPeriod').textContent = `${baseYears}年${baseRemainMonths}ヶ月`;
         document.getElementById('cmpNewPeriod').textContent = `${newYears}年${newRemainMonths}ヶ月`;
 
-        document.getElementById('cmpOrigInterest').textContent = `${totalInterestMan.toFixed(1)} 万円`;
+        document.getElementById('cmpOrigMonthly').textContent = `${(baseMonthlyPaymentYen / 10000).toFixed(2)} 万円`;
+        document.getElementById('cmpNewMonthly').textContent = `${(newMonthlyPaymentYen / 10000).toFixed(2)} 万円`;
+
+        document.getElementById('cmpOrigInterest').textContent = `${baseTotalInterestMan.toFixed(1)} 万円`;
         document.getElementById('cmpNewInterest').textContent = `${(er.newTotalInterest / 10000).toFixed(1)} 万円`;
 
-        document.getElementById('cmpOrigTotal').textContent = `${totalPaymentMan.toFixed(1)} 万円`;
+        document.getElementById('cmpOrigTotal').textContent = `${baseTotalPaymentMan.toFixed(1)} 万円`;
         document.getElementById('cmpNewTotal').textContent = `${(er.newTotalPayment / 10000).toFixed(1)} 万円`;
 
         document.getElementById('resSavedInterest').textContent = `約 ${(er.savedInterest / 10000).toFixed(1)} 万円 おトク`;
-        document.getElementById('resShortenedTime').textContent = `${sYears}年 ${sMonths}ヶ月 短縮！`;
+
+        if (er.type === 'reduce') {
+            document.getElementById('earlyEffectTitle').textContent = '💡 繰上げ返済（返済額軽減型）の効果比較';
+            document.getElementById('lblShortenedOrReduced').textContent = '繰上げ後の月々軽減額:';
+            document.getElementById('resShortenedTime').textContent = `月々 -${Math.round(er.reducedMonthlyPayment).toLocaleString()} 円 軽減！`;
+            document.getElementById('resShortenedTime').className = 'text-success';
+        } else {
+            document.getElementById('earlyEffectTitle').textContent = '💡 繰上げ返済（期間短縮型）の効果比較';
+            document.getElementById('lblShortenedOrReduced').textContent = '返済期間の短縮効果:';
+            document.getElementById('resShortenedTime').textContent = `${sYears} 年 ${sMonths} ヶ月 短縮！`;
+            document.getElementById('resShortenedTime').className = 'text-primary';
+        }
     } else {
         earlyCard.style.display = 'none';
+        tabEarly.style.display = 'none';
+        currentViewMode = 'base';
     }
 
-    // --- 6. 収支バランスと安心度判定 ---
-    const totalOutflowMan = totalLivingMan + targetMonthlySavingsMan + monthlyLoanMan;
+    // --- 6. 現在の表示プラン（通常返済 vs 繰上げ返済）に応じた収支・判定の更新 ---
+    const isShowingEarly = currentViewMode === 'early' && enableEarly && er && !er.error;
+
+    // タブの見た目更新
+    const tabViewBase = document.getElementById('tabViewBase');
+    const tabViewEarly = document.getElementById('tabViewEarly');
+    if (isShowingEarly) {
+        tabViewBase.classList.remove('active');
+        tabViewEarly.classList.add('active', 'early-active');
+        document.getElementById('judgePlanLabel').textContent = '将来の生活安心度診断（⚡ 繰上げ返済プラン適用後）';
+        document.getElementById('balancePlanBadge').textContent = '繰上げ後';
+    } else {
+        tabViewBase.classList.add('active');
+        tabViewEarly.classList.remove('active', 'early-active');
+        document.getElementById('judgePlanLabel').textContent = '将来の生活安心度診断（通常返済プラン）';
+        document.getElementById('balancePlanBadge').textContent = '通常時';
+    }
+
+    // 表示に使う月々返済額と総支払額
+    let activeMonthlyLoanMan = baseMonthlyLoanMan;
+    let activeMonthlyPaymentYen = baseMonthlyPaymentYen;
+    let activeTotalInterestMan = baseTotalInterestMan;
+    let activeTotalPaymentMan = baseTotalPaymentMan;
+
+    if (isShowingEarly) {
+        activeMonthlyLoanMan = er.newMonthlyPayment / 10000;
+        activeMonthlyPaymentYen = er.newMonthlyPayment;
+        activeTotalInterestMan = er.newTotalInterest / 10000;
+        activeTotalPaymentMan = er.newTotalPayment / 10000;
+    }
+
+    document.getElementById('resMonthlyPaymentVal').textContent = `${Math.round(activeMonthlyPaymentYen).toLocaleString()} 円`;
+    document.getElementById('resMonthlyLoan').textContent = `${activeMonthlyLoanMan.toFixed(1)} 万円`;
+    document.getElementById('resTotalInterestVal').textContent = `${activeTotalInterestMan.toFixed(1)} 万円`;
+    document.getElementById('resTotalPaymentVal').textContent = `${activeTotalPaymentMan.toFixed(1)} 万円`;
+    document.getElementById('resSavings').textContent = `${targetMonthlySavingsMan.toFixed(1)} 万円`;
+
+    // 収支計算
+    const totalOutflowMan = totalLivingMan + targetMonthlySavingsMan + activeMonthlyLoanMan;
     const freeMoneyMan = netMonthlyMan - totalOutflowMan;
 
     const freeMoneyElem = document.getElementById('resFreeMoney');
@@ -376,7 +600,7 @@ function updateSimulator() {
     }
 
     // 返済負担率 DTI
-    const dtiRatio = netMonthlyMan > 0 ? (monthlyLoanMan / netMonthlyMan) * 100 : 0;
+    const dtiRatio = netMonthlyMan > 0 ? (activeMonthlyLoanMan / netMonthlyMan) * 100 : 0;
     document.getElementById('resDtiRatio').textContent = `${dtiRatio.toFixed(1)}%`;
 
     const dtiComment = document.getElementById('dtiComment');
@@ -388,7 +612,7 @@ function updateSimulator() {
         dtiComment.textContent = '（返済負担が重く注意が必要です）';
     }
 
-    // 総合判定
+    // 総合判定バッジ
     const statusBadge = document.getElementById('statusBadge');
     const judgeTitle = document.getElementById('judgeTitle');
     const judgeDetail = document.getElementById('judgeDetail');
@@ -407,13 +631,21 @@ function updateSimulator() {
         statusBadge.classList.add('status-warning');
         judgeCard.style.borderColor = 'var(--warning)';
         judgeTitle.textContent = '⚠️ 返済は可能ですが、生活のゆとりが少なめです';
-        judgeDetail.textContent = `手取りの ${dtiRatio.toFixed(1)}% が返済に充てられ、毎月の自由資金は ${freeMoneyMan.toFixed(1)} 万円です。予備の貯金（現在 ${currentSavingsMan}万円）を崩さないよう計画的な支出を心がけましょう。`;
+        judgeDetail.textContent = `手取りの ${dtiRatio.toFixed(1)}% が返済に充てられ、毎月の自由資金は ${freeMoneyMan.toFixed(1)} 万円です。予備の貯金を崩さないよう計画的な支出を心がけましょう。`;
     } else {
         statusBadge.textContent = '安心（無理のない計画）';
         statusBadge.classList.add('status-safe');
         judgeCard.style.borderColor = 'var(--success)';
-        judgeTitle.textContent = '✅ 無理なく安定して返済できる計画です';
-        judgeDetail.textContent = `毎月 ${targetMonthlySavingsMan.toFixed(1)} 万円を貯金しながら、さらに約 ${freeMoneyMan.toFixed(1)} 万円の自由資金が残ります。3回分割借入（合計 ${totalLoanAmountMan.toFixed(0)}万円）の返済負担率も ${dtiRatio.toFixed(1)}% と適正です。`;
+        if (isShowingEarly && er.type === 'shorten') {
+            judgeTitle.textContent = `🚀 繰上げ返済で ${Math.floor(er.shortenedMonths/12)}年${er.shortenedMonths%12}ヶ月 早期完済！`;
+            judgeDetail.textContent = `繰上げ返済により利息を約 ${(er.savedInterest/10000).toFixed(1)} 万円節約でき、${Math.floor(er.newTotalMonths/12)}年${er.newTotalMonths%12}ヶ月で完済します。早期完済後は毎月の返済分（${activeMonthlyLoanMan.toFixed(1)}万円）がまるまる自由資金・資産形成に回ります。`;
+        } else if (isShowingEarly && er.type === 'reduce') {
+            judgeTitle.textContent = `💰 繰上げ返済で毎月の返済が -${Math.round(er.reducedMonthlyPayment).toLocaleString()} 円 軽くなります！`;
+            judgeDetail.textContent = `繰上げ返済によって月々の支払いが安くなり、毎月の自由資金が +${freeMoneyMan.toFixed(1)} 万円に拡大しました。生活のゆとりを確保しながら利息も約 ${(er.savedInterest/10000).toFixed(1)} 万円削減できます。`;
+        } else {
+            judgeTitle.textContent = '✅ 無理なく安定して返済できる計画です';
+            judgeDetail.textContent = `毎月 ${targetMonthlySavingsMan.toFixed(1)} 万円を貯金しながら、さらに約 ${freeMoneyMan.toFixed(1)} 万円の自由資金が残ります。3回分割借入（合計 ${totalLoanAmountMan.toFixed(0)}万円）の返済負担率も ${dtiRatio.toFixed(1)}% と適正です。`;
+        }
     }
 
     // --- 7. スタックバーメーター ---
@@ -426,7 +658,7 @@ function updateSimulator() {
     if (totalDenom > 0) {
         const pctLiving = (totalLivingMan / totalDenom) * 100;
         const pctSavings = (targetMonthlySavingsMan / totalDenom) * 100;
-        const pctLoan = (monthlyLoanMan / totalDenom) * 100;
+        const pctLoan = (activeMonthlyLoanMan / totalDenom) * 100;
         const pctRemain = Math.max(0, (freeMoneyMan / totalDenom) * 100);
 
         segLiving.style.width = `${pctLiving}%`;
@@ -436,19 +668,24 @@ function updateSimulator() {
         segSavings.textContent = pctSavings > 12 ? `貯金 ${targetMonthlySavingsMan.toFixed(1)}万` : '';
 
         segLoan.style.width = `${pctLoan}%`;
-        segLoan.textContent = pctLoan > 12 ? `返済 ${monthlyLoanMan.toFixed(1)}万` : '';
+        segLoan.textContent = pctLoan > 12 ? `返済 ${activeMonthlyLoanMan.toFixed(1)}万` : '';
 
         segRemain.style.width = `${pctRemain}%`;
         segRemain.textContent = pctRemain > 12 ? `余剰 ${freeMoneyMan.toFixed(1)}万` : '';
         segRemain.style.display = freeMoneyMan > 0 ? 'flex' : 'none';
     }
+
+    // --- 8. SVGチャート & 年次スケジュールの更新 ---
+    const earlyHist = (enableEarly && er && !er.error) ? er.history : null;
+    renderLoanChart(sim.baseHistory, earlyHist, sim.totalPrincipal, earlyRepaymentYear);
+    renderYearlySchedule(sim.baseHistory, earlyHist);
 }
 
 // ==========================================
 // イベントリスナー設定
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 返済方式切り替え
+    // 返済方式切り替え（年数指定 vs 返済額指定）
     const modeRadios = document.querySelectorAll('input[name="calcMode"]');
     modeRadios.forEach(radio => {
         radio.addEventListener('change', (e) => {
@@ -467,6 +704,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const earlyToggle = document.getElementById('enableEarlyRepayment');
     earlyToggle.addEventListener('change', (e) => {
         document.getElementById('earlyRepaymentBox').style.display = e.target.checked ? 'block' : 'none';
+        if (!e.target.checked) currentViewMode = 'base';
+        updateSimulator();
+    });
+
+    // 繰上げ返済方式（期間短縮 vs 返済額軽減）
+    const earlyTypeRadios = document.querySelectorAll('input[name="earlyType"]');
+    earlyTypeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            updateSimulator();
+        });
+    });
+
+    // 結果表示モードタブ（通常プラン vs 繰上げプラン）
+    document.getElementById('tabViewBase').addEventListener('click', () => {
+        currentViewMode = 'base';
+        updateSimulator();
+    });
+
+    document.getElementById('tabViewEarly').addEventListener('click', () => {
+        currentViewMode = 'early';
         updateSimulator();
     });
 
