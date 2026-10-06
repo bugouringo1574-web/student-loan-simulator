@@ -2,6 +2,11 @@
 
 学費ローンの年次別（3回分割借入）ごとの借入額・金利差、将来の想定年収から算出した手取り額、一人暮らしの生活費の内訳を考慮し、無理のない返済計画と「繰上げ返済による利息・期間削減効果」を多角的に診断・可視化するWebアプリケーションです。
 
+🌐 **公開URL（GitHub Pages）:**  
+**https://bugouringo1574-web.github.io/student-loan-simulator/**
+
+---
+
 ## 主な機能
 
 1. **年次別（3回分割）借入＆金利設定**
@@ -37,4 +42,4 @@
 
 ## 使い方
 
-1. `index.html` をブラウザで直接開くだけですぐに動作します（ビルドや外部サーバー不要）。
+1. 公開URL（[https://bugouringo1574-web.github.io/student-loan-simulator/](https://bugouringo1574-web.github.io/student-loan-simulator/)）にアクセスするか、ローカルで `index.html` をブラウザで直接開いてご利用いただけます。
